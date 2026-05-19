@@ -336,6 +336,7 @@
     }
 
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
@@ -379,6 +380,7 @@
 
       <div class="output-title" style="border-top: 1px solid var(--border); margin-top: 2rem; padding-top: 1.5rem; margin-bottom: 0;">
         <span>🖼️ Generated Carousel Slides</span>
+        <button id="download-zip-btn" class="btn-sm" style="background: #10b981;">📦 Download All (.ZIP)</button>
       </div>
       <div class="gallery-grid" id="gallery-grid"></div>
     </div>
@@ -541,6 +543,7 @@
         const captionPreview = document.getElementById('caption-preview');
         const galleryGrid = document.getElementById('gallery-grid');
         const copyBtn = document.getElementById('copy-caption-btn');
+        const zipBtn = document.getElementById('download-zip-btn');
 
         captionPreview.textContent = data.result.caption;
         
@@ -551,6 +554,30 @@
           setTimeout(() => {
             copyBtn.textContent = '📋 Copy Caption';
           }, 2000);
+        };
+
+        // ZIP download functionality
+        zipBtn.onclick = async () => {
+          zipBtn.disabled = true;
+          zipBtn.textContent = '📦 Zipping...';
+          try {
+            const zip = new JSZip();
+            data.result.generatedFiles.forEach(file => {
+              zip.file(file.name, file.base64, { base64: true });
+            });
+            const content = await zip.generateAsync({ type: 'blob' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(content);
+            link.download = `${currentCode || 'tripfy'}_carousel.zip`;
+            link.click();
+            zipBtn.textContent = '📦 Download All (.ZIP)';
+          } catch (e) {
+            console.error('ZIP generation failed:', e);
+            alert('Failed to generate ZIP archive: ' + e.message);
+            zipBtn.textContent = '❌ Failed to ZIP';
+          } finally {
+            zipBtn.disabled = false;
+          }
         };
 
         // Render slides gallery
