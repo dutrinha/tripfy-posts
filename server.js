@@ -16,10 +16,16 @@ app.use(express.json());
 // Basic Authentication Middleware
 import crypto from 'crypto';
 
-const adminUser = process.env.ADMIN_USER || 'jotinha';
-const adminPass = process.env.ADMIN_PASSWORD || 'testeteste';
+const adminUser = process.env.ADMIN_USER;
+const adminPass = process.env.ADMIN_PASSWORD;
 
 app.use((req, res, next) => {
+  if (!adminUser || !adminPass) {
+    console.error('❌ Authentication failed: ADMIN_USER or ADMIN_PASSWORD is not configured in environment variables.');
+    res.set('WWW-Authenticate', 'Basic realm="Protected Area"');
+    return res.status(401).send('Authentication not configured on server.');
+  }
+
   const b64auth = (req.headers.authorization || '').split(' ')[1] || '';
   const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':');
 
