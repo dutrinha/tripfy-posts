@@ -1,0 +1,19 @@
+{
+  "name": "tripfy-carousel-generator",
+  "version": "1.0.0",
+  "description": "Automated Instagram/TikTok carousel generator for Tripfy travel itineraries",
+  "type": "module",
+  "main": "generate.js",
+  "scripts": {
+    "generate": "node generate.js",
+    "generate:example": "node generate.js --input example.json --code 4F7X92 --city Paris"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.62",
+    "@supabase/supabase-js": "^2.103.3",
+    "axios": "^1.7.0",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^5.2.1"
+  }
+}

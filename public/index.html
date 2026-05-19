@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tripfy Carousel Setup</title>
+  <style>
+    :root {
+      --bg: #0f1115;
+      --card-bg: #1c1f26;
+      --primary: #6d28d9;
+      --primary-hover: #7c3aed;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: #334155;
+      --danger: #ef4444;
+      --danger-hover: #f87171;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    header {
+      width: 100%;
+      padding: 2rem 0;
+      text-align: center;
+      background: linear-gradient(180deg, rgba(109, 40, 217, 0.15) 0%, rgba(15, 17, 21, 0) 100%);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 2rem;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 2.5rem;
+      background: linear-gradient(to right, #a78bfa, #f472b6);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 800px;
+      padding: 0 1rem;
+      box-sizing: border-box;
+    }
+
+    .search-card {
+      background: var(--card-bg);
+      padding: 2rem;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      font-size: 1.1rem;
+      border-radius: 8px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--primary);
+    }
+
+    button {
+      padding: 0.75rem 1.5rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      background: var(--primary);
+      color: white;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+
+    button:hover {
+      background: var(--primary-hover);
+    }
+
+    button:active {
+      transform: scale(0.98);
+    }
+
+    button.btn-danger {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    button.btn-danger:hover {
+      background: var(--danger);
+      color: white;
+    }
+
+    #itinerary-container {
+      display: none;
+      animation: fadeIn 0.4s ease-out;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .itinerary-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+    }
+
+    .itinerary-title {
+      font-size: 1.8rem;
+      margin: 0;
+    }
+
+    .day-card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      margin-bottom: 1.5rem;
+      overflow: hidden;
+    }
+
+    .day-header {
+      background: rgba(255, 255, 255, 0.03);
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+      font-size: 1.2rem;
+    }
+
+    .activity-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .activity-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      transition: background 0.2s;
+    }
+
+    .activity-item:last-child {
+      border-bottom: none;
+    }
+
+    .activity-item:hover {
+      background: rgba(255,255,255,0.02);
+    }
+
+    .activity-main {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex: 1;
+    }
+
+    .activity-img {
+      width: 64px;
+      height: 64px;
+      border-radius: 8px;
+      object-fit: cover;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .activity-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .activity-name {
+      font-weight: 500;
+      font-size: 1.1rem;
+    }
+
+    .activity-meta {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    .loading {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-muted);
+      font-size: 1.2rem;
+      display: none;
+    }
+
+    .status-msg {
+      margin-top: 1rem;
+      padding: 1rem;
+      border-radius: 8px;
+      display: none;
+    }
+    
+    .status-msg.success {
+      background: rgba(34, 197, 94, 0.1);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.2);
+    }
+
+    .status-msg.error {
+      background: rgba(239, 68, 68, 0.1);
+      color: #f87171;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    /* Output Results Styling */
+    .output-section {
+      background: var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      padding: 2rem;
+      margin-top: 2rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    }
+
+    .output-title {
+      font-size: 1.5rem;
+      margin-top: 0;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .caption-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: inherit;
+      white-space: pre-wrap;
+      max-height: 200px;
+      overflow-y: auto;
+      margin-bottom: 1rem;
+      font-size: 0.95rem;
+      color: var(--text);
+    }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1.5rem;
+      margin-top: 1.5rem;
+    }
+
+    .gallery-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .gallery-img {
+      width: 100%;
+      aspect-ratio: 1080/1350;
+      object-fit: cover;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+    }
+
+    .gallery-info {
+      padding: 0.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .gallery-name {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 120px;
+    }
+
+    .btn-sm {
+      padding: 0.4rem 0.8rem;
+      font-size: 0.85rem;
+      border-radius: 6px;
+      font-weight: 500;
+      background: var(--primary);
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+
+    .btn-sm:hover {
+      background: var(--primary-hover);
+    }
+
+    .mobile-tip {
+      background: rgba(109, 40, 217, 0.1);
+      border: 1px solid rgba(109, 40, 217, 0.2);
+      color: #a78bfa;
+      border-radius: 8px;
+      padding: 0.75rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Tripfy Generator</h1>
+    <p style="color: var(--text-muted); margin-top: 0.5rem;">Input code to generate beautiful carousels</p>
+  </header>
+
+  <div class="container">
+    <div class="search-card">
+      <input type="text" id="share-code" placeholder="Enter 6-digit Share Code (e.g. 4F7X92)" maxlength="10">
+      <button id="fetch-btn">Fetch Itinerary</button>
+    </div>
+
+    <div class="loading" id="loading">Fetching data...</div>
+    <div class="status-msg" id="status-msg"></div>
+
+    <div id="itinerary-container">
+      <div class="itinerary-header">
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <h2 class="itinerary-title" id="itinerary-title">Title</h2>
+          <input type="text" id="city-input" style="max-width:300px; padding:0.5rem; border-radius:6px;" placeholder="Location (e.g. Paris)">
+        </div>
+        <button id="generate-btn">✨ Generate Images</button>
+      </div>
+
+      <div id="days-container"></div>
+    </div>
+
+    <div id="output-container" class="output-section" style="display: none;">
+      <div class="output-title">
+        <span>📝 Generated Instagram Caption</span>
+        <button id="copy-caption-btn" class="btn-sm">📋 Copy Caption</button>
+      </div>
+      <div class="caption-box" id="caption-preview"></div>
+
+      <div class="mobile-tip">
+        <span>💡</span>
+        <span><strong>Mobile Support:</strong> Press and hold any image below and select <strong>"Add to Photos"</strong> / <strong>"Save Image"</strong> to save to your camera roll.</span>
+      </div>
+
+      <div class="output-title" style="border-top: 1px solid var(--border); margin-top: 2rem; padding-top: 1.5rem; margin-bottom: 0;">
+        <span>🖼️ Generated Carousel Slides</span>
+      </div>
+      <div class="gallery-grid" id="gallery-grid"></div>
+    </div>
+  </div>
+
+  <script>
+    let currentItinerary = null;
+    let currentCode = '';
+
+    const fetchBtn = document.getElementById('fetch-btn');
+    const generateBtn = document.getElementById('generate-btn');
+    const codeInput = document.getElementById('share-code');
+    const loadingEl = document.getElementById('loading');
+    const container = document.getElementById('itinerary-container');
+    const daysContainer = document.getElementById('days-container');
+    const titleEl = document.getElementById('itinerary-title');
+    const cityInput = document.getElementById('city-input');
+    const statusMsg = document.getElementById('status-msg');
+
+    function showStatus(msg, type) {
+      statusMsg.textContent = msg;
+      statusMsg.className = `status-msg ${type}`;
+      statusMsg.style.display = 'block';
+    }
+
+    function hideStatus() {
+      statusMsg.style.display = 'none';
+    }
+
+    fetchBtn.addEventListener('click', async () => {
+      const code = codeInput.value.trim();
+      if (!code) return;
+
+      hideStatus();
+      container.style.display = 'none';
+      document.getElementById('output-container').style.display = 'none';
+      loadingEl.style.display = 'block';
+
+      try {
+        const res = await fetch(`/api/itinerary/${code}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Failed to fetch');
+        }
+
+        currentItinerary = data;
+        currentCode = code;
+        renderItinerary();
+      } catch (err) {
+        showStatus(err.message, 'error');
+      } finally {
+        loadingEl.style.display = 'none';
+      }
+    });
+
+    function renderItinerary() {
+      if (!currentItinerary || !currentItinerary.items) return;
+
+      titleEl.textContent = currentItinerary.title;
+      cityInput.value = currentItinerary.title.split(',')[0].trim(); // Guess the city for convenience
+      daysContainer.innerHTML = '';
+
+      currentItinerary.items.forEach((day, dayIndex) => {
+        const dayCard = document.createElement('div');
+        dayCard.className = 'day-card';
+
+        const dayHeader = document.createElement('div');
+        dayHeader.className = 'day-header';
+        dayHeader.textContent = `Day ${day.day} - ${day.title || ''}`;
+        dayCard.appendChild(dayHeader);
+
+        const activityList = document.createElement('ul');
+        activityList.className = 'activity-list';
+
+        day.activities.forEach((act, actIndex) => {
+          const li = document.createElement('li');
+          li.className = 'activity-item';
+
+          const mainContainer = document.createElement('div');
+          mainContainer.className = 'activity-main';
+
+          const img = document.createElement('img');
+          img.className = 'activity-img';
+          const params = new URLSearchParams({
+            name: act.name || act.text || '',
+            city: cityInput.value || currentItinerary.title || '',
+            id: act.id || '',
+            dayNum: day.day,
+            index: actIndex
+          });
+          img.src = '/api/preview-image?' + params.toString();
+          img.onerror = () => { img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="%231c1f26"/><text x="50" y="55" font-family="sans-serif" font-size="30" text-anchor="middle" fill="%23334155">?</text></svg>'; };
+
+          const info = document.createElement('div');
+          info.className = 'activity-info';
+          
+          const nameContainer = document.createElement('div');
+          nameContainer.className = 'activity-name';
+          nameContainer.textContent = act.name || act.text || 'Unnamed Place';
+
+          const metaContainer = document.createElement('div');
+          metaContainer.className = 'activity-meta';
+          metaContainer.textContent = `${act.type || 'Activity'} • ${act.vicinity || ''}`;
+
+          info.appendChild(nameContainer);
+          info.appendChild(metaContainer);
+
+          mainContainer.appendChild(img);
+          mainContainer.appendChild(info);
+
+          const delBtn = document.createElement('button');
+          delBtn.className = 'btn-danger';
+          delBtn.textContent = 'Remove';
+          delBtn.onclick = () => removeActivity(dayIndex, actIndex);
+
+          li.appendChild(mainContainer);
+          li.appendChild(delBtn);
+          activityList.appendChild(li);
+        });
+
+        dayCard.appendChild(activityList);
+        daysContainer.appendChild(dayCard);
+      });
+
+      container.style.display = 'block';
+    }
+
+    function removeActivity(dayIndex, actIndex) {
+      if (!currentItinerary || !currentItinerary.items[dayIndex]) return;
+      
+      currentItinerary.items[dayIndex].activities.splice(actIndex, 1);
+      renderItinerary();
+    }
+
+    generateBtn.addEventListener('click', async () => {
+      if (!currentItinerary || !currentItinerary.items) return;
+
+      generateBtn.disabled = true;
+      generateBtn.textContent = 'Generating... Please wait';
+      hideStatus();
+      document.getElementById('output-container').style.display = 'none';
+
+      try {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: currentCode,
+            city: cityInput.value || currentItinerary.title,
+            items: currentItinerary.items
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Generation failed');
+
+        // Setup results view
+        const outputContainer = document.getElementById('output-container');
+        const captionPreview = document.getElementById('caption-preview');
+        const galleryGrid = document.getElementById('gallery-grid');
+        const copyBtn = document.getElementById('copy-caption-btn');
+
+        captionPreview.textContent = data.result.caption;
+        
+        // Copy functionality
+        copyBtn.onclick = () => {
+          navigator.clipboard.writeText(data.result.caption);
+          copyBtn.textContent = '✅ Copied!';
+          setTimeout(() => {
+            copyBtn.textContent = '📋 Copy Caption';
+          }, 2000);
+        };
+
+        // Render slides gallery
+        galleryGrid.innerHTML = '';
+        data.result.generatedFiles.forEach((file) => {
+          const card = document.createElement('div');
+          card.className = 'gallery-card';
+
+          const img = document.createElement('img');
+          img.className = 'gallery-img';
+          img.src = `data:image/png;base64,${file.base64}`;
+          img.alt = file.name;
+          img.onclick = () => {
+            const win = window.open();
+            win.document.write(`<img src="data:image/png;base64,${file.base64}" style="max-height:100vh; display:block; margin:auto;" />`);
+          };
+
+          const info = document.createElement('div');
+          info.className = 'gallery-info';
+
+          const nameSpan = document.createElement('span');
+          nameSpan.className = 'gallery-name';
+          nameSpan.textContent = file.name.replace('.png', '');
+
+          const downloadLink = document.createElement('a');
+          downloadLink.href = `data:image/png;base64,${file.base64}`;
+          downloadLink.download = file.name;
+          downloadLink.style.textDecoration = 'none';
+
+          const dlBtn = document.createElement('button');
+          dlBtn.className = 'btn-sm';
+          dlBtn.textContent = '⬇️ Save';
+          downloadLink.appendChild(dlBtn);
+
+          info.appendChild(nameSpan);
+          info.appendChild(downloadLink);
+          card.appendChild(img);
+          card.appendChild(info);
+          galleryGrid.appendChild(card);
+        });
+
+        outputContainer.style.display = 'block';
+        outputContainer.scrollIntoView({ behavior: 'smooth' });
+
+        showStatus(`Success! Generated ${data.result.generatedFiles.length} slides!`, 'success');
+      } catch (err) {
+        showStatus(err.message, 'error');
+      } finally {
+        generateBtn.disabled = false;
+        generateBtn.textContent = '✨ Generate Images';
+      }
+    });
+
+  </script>
+</body>
+</html>
