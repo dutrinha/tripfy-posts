@@ -378,9 +378,12 @@
         <span><strong>Mobile Support:</strong> Press and hold any image below and select <strong>"Add to Photos"</strong> / <strong>"Save Image"</strong> to save to your camera roll.</span>
       </div>
 
-      <div class="output-title" style="border-top: 1px solid var(--border); margin-top: 2rem; padding-top: 1.5rem; margin-bottom: 0;">
+      <div class="output-title" style="border-top: 1px solid var(--border); margin-top: 2rem; padding-top: 1.5rem; margin-bottom: 0; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px;">
         <span>🖼️ Generated Carousel Slides</span>
-        <button id="download-zip-btn" class="btn-sm" style="background: #10b981;">📦 Download All (.ZIP)</button>
+        <div style="display: flex; gap: 10px;">
+          <button id="save-gallery-btn" class="btn-sm" style="background: #a78bfa; display: none;">📲 Save All to Photos</button>
+          <button id="download-zip-btn" class="btn-sm" style="background: #10b981;">📦 Download ZIP</button>
+        </div>
       </div>
       <div class="gallery-grid" id="gallery-grid"></div>
     </div>
@@ -544,6 +547,7 @@
         const galleryGrid = document.getElementById('gallery-grid');
         const copyBtn = document.getElementById('copy-caption-btn');
         const zipBtn = document.getElementById('download-zip-btn');
+        const saveGalleryBtn = document.getElementById('save-gallery-btn');
 
         captionPreview.textContent = data.result.caption;
         
@@ -555,6 +559,46 @@
             copyBtn.textContent = '📋 Copy Caption';
           }, 2000);
         };
+
+        // Check if browser supports sharing files natively (e.g. iOS Safari)
+        let canShareFiles = false;
+        try {
+          const mockFile = new File([''], 'test.png', { type: 'image/png' });
+          if (navigator.canShare && navigator.canShare({ files: [mockFile] })) {
+            canShareFiles = true;
+          }
+        } catch (e) {}
+
+        if (canShareFiles) {
+          saveGalleryBtn.style.display = 'block';
+          saveGalleryBtn.onclick = async () => {
+            saveGalleryBtn.disabled = true;
+            saveGalleryBtn.textContent = '⏳ Preparing slides...';
+            try {
+              const fileObjects = [];
+              for (const file of data.result.generatedFiles) {
+                const resBlob = await fetch(`data:image/png;base64,${file.base64}`);
+                const blob = await resBlob.blob();
+                const fileObj = new File([blob], file.name, { type: 'image/png' });
+                fileObjects.push(fileObj);
+              }
+              
+              await navigator.share({
+                files: fileObjects,
+                title: 'Tripfy Travel Itinerary Slides',
+                text: `Tripfy travel slides for ${cityInput.value || 'Trip'}`
+              });
+              saveGalleryBtn.textContent = '📲 Save All to Photos';
+            } catch (err) {
+              console.warn('Share sheet closed or failed:', err);
+              saveGalleryBtn.textContent = '📲 Save All to Photos';
+            } finally {
+              saveGalleryBtn.disabled = false;
+            }
+          };
+        } else {
+          saveGalleryBtn.style.display = 'none';
+        }
 
         // ZIP download functionality
         zipBtn.onclick = async () => {
@@ -570,7 +614,7 @@
             link.href = URL.createObjectURL(content);
             link.download = `${currentCode || 'tripfy'}_carousel.zip`;
             link.click();
-            zipBtn.textContent = '📦 Download All (.ZIP)';
+            zipBtn.textContent = '📦 Download ZIP';
           } catch (e) {
             console.error('ZIP generation failed:', e);
             alert('Failed to generate ZIP archive: ' + e.message);
