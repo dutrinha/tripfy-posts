@@ -80,7 +80,7 @@ export async function renderTopPlaceSlide(placeName, imageBuffers) {
   }
   
   const fontSize = CONFIG.fonts?.sizes?.locationName || 56;
-  ctx.font = `bold ${fontSize}px "Arial", "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+  ctx.font = `bold ${fontSize}px "${CONFIG.fonts.family}", "Arial", "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
   
   const maxTextWidth = W * 0.8;
   const lines = wrapText(ctx, placeName, maxTextWidth);

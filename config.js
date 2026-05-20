@@ -40,7 +40,7 @@ export const CONFIG = {
 
   // ── Typography ───────────────────────────────────────────
   fonts: {
-    family: 'Arial',   // safe cross-platform default
+    family: 'Inter',   // registered custom font
     sizes: {
       travelPill: 16,
       locationName: 44,
@@ -110,6 +110,7 @@ export const CONFIG = {
         'how to spend DAYS days in COUNTRY {emoji}'
       ],
       topPlaces: [
+        'things to do in COUNTRY {emoji}',
         'must visit places in COUNTRY {emoji}',
         'places to visit in COUNTRY {emoji}',
         'best spots in COUNTRY {emoji}',

@@ -21,15 +21,15 @@ try {
   }
 
   if (fs.existsSync(regularFont)) {
-    GlobalFonts.registerFromPath(regularFont, 'Arial');
-    console.log('✅ Registered font from path: Inter-Regular.ttf as Arial');
+    GlobalFonts.registerFromPath(regularFont, 'Inter');
+    console.log('✅ Registered font from path: Inter-Regular.ttf as Inter');
   } else {
     console.warn('⚠️ Warning: Regular font file not found:', regularFont);
   }
 
   if (fs.existsSync(boldFont)) {
-    GlobalFonts.registerFromPath(boldFont, 'Arial');
-    console.log('✅ Registered font from path: Inter-Bold.ttf as Arial');
+    GlobalFonts.registerFromPath(boldFont, 'Inter');
+    console.log('✅ Registered font from path: Inter-Bold.ttf as Inter');
   } else {
     console.warn('⚠️ Warning: Bold font file not found:', boldFont);
   }

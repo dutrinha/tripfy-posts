@@ -199,7 +199,7 @@ export async function renderHookSlide(city, numDays, itinerary, postType = 'itin
 
   // 4. Wrap and Render centered text with bold UGC style
   const fontSize = CONFIG.fonts.sizes.hookText || 56;
-  ctx.font = `bold ${fontSize}px "Arial", "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+  ctx.font = `bold ${fontSize}px "${CONFIG.fonts.family}", "Arial", "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
 
   // Use a narrower text width (64% of canvas width) to match UGC mobile screens and force elegant multi-line wrapping
   const maxTextWidth = W * 0.64;

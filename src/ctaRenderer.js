@@ -87,7 +87,7 @@ export async function renderCtaSlide(code, city, slideIndex, totalSlides, postTy
   
   // 4. Render UGC Text
   const fontSize = CONFIG.fonts.sizes.hookText || 56;
-  ctx.font = `bold ${fontSize}px "Arial", "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+  ctx.font = `bold ${fontSize}px "${CONFIG.fonts.family}", "Arial", "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
 
   const maxTextWidth = W * 0.70;
   const lines = wrapText(ctx, textLines, maxTextWidth);
@@ -118,9 +118,9 @@ export async function renderCtaSlide(code, city, slideIndex, totalSlides, postTy
     // Set font size smaller for the CTA line
     const isCtaLine = index === lines.length - 1 && line.includes(code);
     if (isCtaLine) {
-      ctx.font = `bold ${fontSize * 0.75}px "Arial", "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+      ctx.font = `bold ${fontSize * 0.75}px "${CONFIG.fonts.family}", "Arial", "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
     } else {
-      ctx.font = `bold ${fontSize}px "Arial", "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+      ctx.font = `bold ${fontSize}px "${CONFIG.fonts.family}", "Arial", "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
     }
 
     ctx.strokeText(line, x, y);
