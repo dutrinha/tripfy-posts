@@ -7,9 +7,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 try {
-  const regularFont = path.join(__dirname, '..', 'assets', 'Inter-Regular.ttf');
-  const boldFont = path.join(__dirname, '..', 'assets', 'Inter-Bold.ttf');
-
   // Statically analyzable read calls for Vercel Node File Trace (NFT).
   // These MUST contain the path.join(__dirname, ...) structure with literal strings
   // so the `@vercel/nft` bundler traces and includes the font files.
@@ -20,16 +17,42 @@ try {
     // Suppress errors from dummy reads during trace static-analysis
   }
 
+  // Robust path resolution checking both process.cwd() and __dirname
+  let regularFont = path.join(process.cwd(), 'assets', 'Inter-Regular.ttf');
+  let boldFont = path.join(process.cwd(), 'assets', 'Inter-Bold.ttf');
+
+  if (!fs.existsSync(regularFont)) {
+    regularFont = path.join(__dirname, '..', 'assets', 'Inter-Regular.ttf');
+  }
+  if (!fs.existsSync(boldFont)) {
+    boldFont = path.join(__dirname, '..', 'assets', 'Inter-Bold.ttf');
+  }
+
+  // Buffer-based registration with path-based fallback to guarantee compatibility on Vercel
   if (fs.existsSync(regularFont)) {
-    GlobalFonts.registerFromPath(regularFont, 'Inter');
-    console.log('✅ Registered font from path: Inter-Regular.ttf as Inter');
+    try {
+      global.interRegularFontBuffer = fs.readFileSync(regularFont);
+      GlobalFonts.register(global.interRegularFontBuffer, 'Inter');
+      console.log(`✅ Registered font buffer from: ${regularFont} as Inter`);
+    } catch (bufferErr) {
+      console.warn('⚠️ Buffer registration failed, falling back to path registration:', bufferErr.message);
+      GlobalFonts.registerFromPath(regularFont, 'Inter');
+      console.log(`✅ Registered font from path: ${regularFont} as Inter`);
+    }
   } else {
     console.warn('⚠️ Warning: Regular font file not found:', regularFont);
   }
 
   if (fs.existsSync(boldFont)) {
-    GlobalFonts.registerFromPath(boldFont, 'Inter');
-    console.log('✅ Registered font from path: Inter-Bold.ttf as Inter');
+    try {
+      global.interBoldFontBuffer = fs.readFileSync(boldFont);
+      GlobalFonts.register(global.interBoldFontBuffer, 'Inter');
+      console.log(`✅ Registered font buffer from: ${boldFont} as Inter`);
+    } catch (bufferErr) {
+      console.warn('⚠️ Buffer registration failed, falling back to path registration:', bufferErr.message);
+      GlobalFonts.registerFromPath(boldFont, 'Inter');
+      console.log(`✅ Registered font from path: ${boldFont} as Inter`);
+    }
   } else {
     console.warn('⚠️ Warning: Bold font file not found:', boldFont);
   }
