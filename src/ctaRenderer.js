@@ -4,84 +4,145 @@
 
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { CONFIG } from '../config.js';
-import fs from 'fs';
-import path from 'path';
+import { fetchHookImage } from './imageFetcher.js';
 
 const W = CONFIG.width;
 const H = CONFIG.height;
 
-function drawBackground(ctx) {
-  ctx.fillStyle = '#0c0c0cff';
-  ctx.fillRect(0, 0, W, H);
+/**
+ * Wraps text into multiple lines based on a maximum width constraint, supporting explicit newlines.
+ */
+function wrapText(ctx, text, maxWidth) {
+  const paragraphs = text.split('\n');
+  const lines = [];
+  
+  for (const paragraph of paragraphs) {
+    const words = paragraph.split(' ');
+    let currentLine = words[0] || '';
+    
+    for (let i = 1; i < words.length; i++) {
+      const word = words[i];
+      const width = ctx.measureText(currentLine + ' ' + word).width;
+      if (width < maxWidth) {
+        currentLine += (currentLine ? ' ' : '') + word;
+      } else {
+        lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+  }
+  return lines;
 }
 
-export async function renderCtaSlide(code, city, slideIndex, totalSlides) {
+export async function renderCtaSlide(code, city, slideIndex, totalSlides, postType = 'itinerary') {
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
-  drawBackground(ctx);
+  // 1. Draw Background Image
+  const bgImgBuffer = await fetchHookImage(city);
+  if (bgImgBuffer) {
+    try {
+      const bgImg = await loadImage(bgImgBuffer);
+      let drawW, drawH;
+      const ratio = bgImg.width / bgImg.height;
+      if (W / H > ratio) {
+        drawW = W;
+        drawH = W / ratio;
+      } else {
+        drawH = H;
+        drawW = H * ratio;
+      }
+      ctx.drawImage(bgImg, (W - drawW) / 2, (H - drawH) / 2, drawW, drawH);
+    } catch (e) {
+      console.warn('⚠️ Failed to load background image for CTA slide.', e);
+      ctx.fillStyle = '#1c1f26';
+      ctx.fillRect(0, 0, W, H);
+    }
+  } else {
+    ctx.fillStyle = '#1c1f26';
+    ctx.fillRect(0, 0, W, H);
+  }
 
-  // 1. Draw Text at the Top
+  // 2. Add subtle dark gradient overlay for readability
+  const gradient = ctx.createLinearGradient(0, 0, 0, H);
+  gradient.addColorStop(0, 'rgba(0,0,0,0.25)');
+  gradient.addColorStop(1, 'rgba(0,0,0,0.15)');
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, W, H);
+
+  // 3. CTA UGC Text
+  const ctaHooksMap = CONFIG.templates?.cta?.hooks || {};
+  const ctaHooks = ctaHooksMap[postType] || ctaHooksMap.itinerary || [
+    "i planned this entire trip on Tripfy in seconds ✈️"
+  ];
+  const randomHook = ctaHooks[Math.floor(Math.random() * ctaHooks.length)];
+  
+  const textLines = [
+    randomHook,
+    `(use code ${code} in app to see it in 3D)`
+  ].join('\n');
+  
+  // 4. Render UGC Text
+  const fontSize = CONFIG.fonts.sizes.hookText || 56;
+  ctx.font = `bold ${fontSize}px "Arial", "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+
+  const maxTextWidth = W * 0.70;
+  const lines = wrapText(ctx, textLines, maxTextWidth);
+  const lineHeight = fontSize * 1.3;
+  const totalTextHeight = lines.length * lineHeight;
+  
+  const startY = (H - totalTextHeight) / 2 + lineHeight / 2;
+  const startX = W / 2;
+
+  ctx.save();
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  
-  // Main Header
-  ctx.fillStyle = '#FFFFFF';
-  ctx.font = `bold 72px ${CONFIG.fonts.family}`;
-  ctx.fillText('Check this itinerary in', W / 2, 200);
-  ctx.fillText('3D on Tripfy!', W / 2, 260);
 
-  // "Code:" Label (Moved to the right side)
-  ctx.fillStyle = '#A1A1AA'; // Light Grayish color
-  ctx.font = `600 42px ${CONFIG.fonts.family}`;
-  ctx.fillText('Share Code:', 830, 550);
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+  ctx.lineWidth = Math.max(5, fontSize * 0.12);
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
 
-  // The actual Code
-  ctx.fillStyle = '#FFFFFF'; // Bright white for maximum contrast
-  ctx.font = `bold 84px ${CONFIG.fonts.family}`;
-  ctx.fillText(code, 830, 640);
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetX = 3;
+  ctx.shadowOffsetY = 3;
 
-  // 2. Draw the phone asset properly scaled
-  try {
-    const phoneImgPath = path.resolve('./assets/png phone.png');
-    if (fs.existsSync(phoneImgPath)) {
-      const phoneImg = await loadImage(phoneImgPath);
-      
-      const scale = 0.70; // 70% scale
-      const targetW = phoneImg.width * scale;
-      const targetH = phoneImg.height * scale;
-      
-      // Position to the left (-40px offset) and 15px margin from the bottom
-      const phoneX = -40;
-      const phoneY = H - targetH - 45; 
-      
-      ctx.drawImage(phoneImg, 0, 0, phoneImg.width, phoneImg.height, phoneX, phoneY, targetW, targetH);
+  lines.forEach((line, index) => {
+    const x = startX;
+    const y = startY + index * lineHeight;
+
+    // Set font size smaller for the CTA line
+    const isCtaLine = index === lines.length - 1 && line.includes(code);
+    if (isCtaLine) {
+      ctx.font = `bold ${fontSize * 0.75}px "Arial", "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
     } else {
-      console.warn('⚠️ Missing "png phone.png" asset in assets folder!');
+      ctx.font = `bold ${fontSize}px "Arial", "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
     }
-  } catch (err) {
-    console.warn('⚠️ Failed to load "png phone.png" asset:', err.message);
-  }
 
-  // 3. Draw App Store Badge at bottom right perfectly matching the mockup
-  try {
-    const badgePath = path.resolve('./assets/Download_on_the_App_Store_Badge.svg.png');
-    if (fs.existsSync(badgePath)) {
-      const badgeImg = await loadImage(badgePath);
-      
-      const badgeW = 380; 
-      const badgeH = badgeImg.height * (badgeW / badgeImg.width);
-      
-      const btnX = W - badgeW - 60; 
-      const btnY = H - badgeH - 220; 
-      
-      ctx.drawImage(badgeImg, btnX, btnY, badgeW, badgeH);
+    ctx.strokeText(line, x, y);
+
+    ctx.save();
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    
+    if (isCtaLine) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
     } else {
-      console.warn('⚠️ Missing "Download_on_the_App_Store_Badge.svg.png" in assets folder!');
+      ctx.fillStyle = '#FFFFFF';
     }
-  } catch (err) {
-    console.warn('⚠️ Failed to load App Store badge:', err.message);
-  }
+    
+    ctx.fillText(line, x, y);
+    ctx.restore();
+  });
+
+  ctx.restore();
 
   return canvas.toBuffer('image/png');
 }
+

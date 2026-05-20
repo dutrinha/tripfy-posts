@@ -80,7 +80,7 @@ export async function generateCarousel(raw, code, cityArg) {
 
   // ── 3. Render Hook Slide ──
   console.log('  \x1b[36m[2/5]\x1b[0m Rendering hook slide...');
-  const hookBuffer = await renderHookSlide(city, itinerary.length);
+  const hookBuffer = await renderHookSlide(city, itinerary.length, itinerary, 'itinerary');
   const hookFilename = `slide_00_hook.png`;
   const hookPath = path.join(outDir, hookFilename);
   
@@ -144,7 +144,7 @@ export async function generateCarousel(raw, code, cityArg) {
   console.log('  \x1b[36m[4/5]\x1b[0m Rendering CTA slide...');
 
   const ctaIndex = itinerary.length + 1;
-  const ctaBuffer = await renderCtaSlide(code, city, ctaIndex, totalSlides);
+  const ctaBuffer = await renderCtaSlide(code, city, ctaIndex, totalSlides, 'itinerary');
 
   const ctaFilename = `slide_${String(ctaIndex).padStart(2, '0')}_cta.png`;
   const ctaFilepath = path.join(outDir, ctaFilename);
@@ -168,7 +168,7 @@ export async function generateCarousel(raw, code, cityArg) {
   // ── 6. Generate Caption ──
   console.log('  \x1b[36m[5/5]\x1b[0m Generating viral caption...');
 
-  const caption = generateCaption(city, itinerary.length, code, itinerary);
+  const caption = generateCaption(city, itinerary.length, code, itinerary, 'itinerary');
   const captionPath = path.join(outDir, 'caption.txt');
   
   if (isWritable) {
@@ -204,7 +204,8 @@ export async function generateCarousel(raw, code, cityArg) {
 }
 
 // ── CLI Execution ──
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (isMain) {
   const inputFile = getArg('input') || 'example.json';
   const code      = getArg('code')  || '000000';
   const cityArg   = getArg('city');

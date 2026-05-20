@@ -13,37 +13,16 @@ import { CONFIG } from '../config.js';
  * @param {Array}  itinerary — parsed itinerary data
  * @returns {string} ready-to-paste caption
  */
-export function generateCaption(city, numDays, code, itinerary) {
-  // Collect unique location names for flavor
-  const spots = itinerary
-    .flatMap((d) => d.activities.map((a) => a.name))
-    .slice(0, 6);
+export function generateCaption(city, numDays, code, itinerary, postType = 'itinerary') {
+  const hashtags = `#${city.replace(/\s+/g, '')} #${city.replace(/\s+/g, '')}Travel #TravelItinerary #Tripfy #TravelPlanner #${city.replace(/\s+/g, '')}Guide #TravelTips #Wanderlust #TravelHack #BucketList #EuropeTravel #TravelReels #ExploreMore #HiddenGems #TravelContent #ViralTravel`;
 
-  const spotsList = spots.map((s) => `  ${s}`).join('\n');
-
-  const caption = `
-${city} in ${numDays} days — save this itinerary! ${getEmoji(city)}
-
-I spent hours planning the PERFECT ${city} trip so you don't have to. Here's every spot, timed out day by day:
-
-${spotsList}
-  ...and more!
-
-Want the full detailed itinerary with maps, times, and tips?
-
-1. Download Tripfy (link in bio)
-2. Use code: ${code}
-3. Get the entire trip on your phone instantly
-
-This isn't just a list — it's a real, walkable itinerary with everything planned for you.
-
-Save this. Share it. Thank me later.
-
-—
-#${city.replace(/\s+/g, '')} #${city.replace(/\s+/g, '')}Travel #TravelItinerary #Tripfy #TravelPlanner #${city.replace(/\s+/g, '')}Guide #TravelTips #Wanderlust #TravelHack #BucketList #EuropeTravel #TravelReels #ExploreMore #HiddenGems #TravelContent #ViralTravel
-`.trim();
-
-  return caption;
+  const hooks = [
+    "Tripfy saved me hours planning trips",
+    "literally tinder for travel 🔥"
+  ];
+  
+  const hook = hooks[Math.floor(Math.random() * hooks.length)];
+  return `${hook}\n\n${hashtags}`;
 }
 
 function getEmoji(city) {

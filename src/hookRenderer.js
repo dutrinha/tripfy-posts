@@ -1,24 +1,203 @@
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { CONFIG } from '../config.js';
-import { fetchImageForLocation } from './imageFetcher.js';
+import { fetchImageForLocation, fetchHookImage } from './imageFetcher.js';
+import fs from 'fs';
+import path from 'path';
+import axios from 'axios';
+
+/**
+ * Generates the official Twemoji CDN URL for a given emoji character.
+ * Filters out 'fe0f' (variation selector) because Twemoji omits it for standard icons.
+ */
+function getTwemojiUrl(emoji) {
+  const codePoints = [];
+  for (const char of emoji) {
+    const cp = char.codePointAt(0);
+    codePoints.push(cp.toString(16));
+  }
+  const cleanCodePoints = codePoints.filter(cp => cp !== 'fe0f');
+  const hexStr = cleanCodePoints.join('-');
+  return `https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/${hexStr}.png`;
+}
+
+/**
+ * Downloads and caches the Twemoji PNG image for an emoji.
+ */
+async function fetchEmojiImage(emoji) {
+  if (!emoji) return null;
+  
+  const cacheDir = CONFIG.images.cacheDir || './cache';
+  const codePoints = [];
+  for (const char of emoji) {
+    const cp = char.codePointAt(0);
+    codePoints.push(cp.toString(16));
+  }
+  const cleanCodePoints = codePoints.filter(cp => cp !== 'fe0f');
+  const hexStr = cleanCodePoints.join('-');
+  const cachePath = path.join(cacheDir, `emoji_${hexStr}.png`);
+
+  // 1. Check local cache
+  try {
+    if (fs.existsSync(cachePath)) {
+      return fs.readFileSync(cachePath);
+    }
+  } catch (e) {
+    // Ignore cache read errors
+  }
+
+  // 2. Fetch from Twemoji CDN
+  try {
+    const url = `https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/${hexStr}.png`;
+    const res = await axios.get(url, { responseType: 'arraybuffer', timeout: CONFIG.images.timeout || 10000 });
+    const buffer = Buffer.from(res.data);
+
+    // 3. Save to cache
+    try {
+      if (!fs.existsSync(cacheDir)) {
+        fs.mkdirSync(cacheDir, { recursive: true });
+      }
+      fs.writeFileSync(cachePath, buffer);
+    } catch (e) {
+      // Ignore cache write errors (e.g. read-only file systems)
+    }
+
+    return buffer;
+  } catch (err) {
+    console.warn(`⚠️ Failed to fetch emoji image from Twemoji CDN for "${emoji}" (${hexStr}):`, err.message);
+    return null;
+  }
+}
+
 
 const W = CONFIG.width;
 const H = CONFIG.height;
 
 /**
- * Renders the hook (first page) slide.
+ * Maps cities/countries to their flag emojis.
+ */
+export function getCountryAndEmoji(city, itinerary) {
+  const cityLower = city ? city.toLowerCase().trim() : '';
+
+  // 1. Try to extract country from itinerary vicinities
+  let countryName = '';
+  if (itinerary && Array.isArray(itinerary)) {
+    for (const day of itinerary) {
+      for (const act of day.activities) {
+        if (!act.vicinity) continue;
+        const parts = act.vicinity.split(/[,\n]/).map(p => p.trim()).filter(Boolean);
+        if (parts.length > 0) {
+          const lastPart = parts[parts.length - 1];
+          if (lastPart.length > 2 && !/\d/.test(lastPart)) {
+            countryName = lastPart;
+            break;
+          }
+        }
+      }
+      if (countryName) break;
+    }
+  }
+
+  const cityMap = CONFIG.hook?.cityMap || {};
+  const countryMap = CONFIG.hook?.countryMap || {};
+
+  // Try matching city name directly to our city list
+  for (const [knownCity, info] of Object.entries(cityMap)) {
+    if (cityLower.includes(knownCity)) {
+      return info;
+    }
+  }
+
+  // Trim and check country from itinerary vicinities
+  if (countryName) {
+    const countryLower = countryName.toLowerCase().trim();
+    if (countryMap[countryLower]) {
+      return { country: countryName, emoji: countryMap[countryLower] };
+    }
+    for (const [name, emoji] of Object.entries(countryMap)) {
+      if (countryLower.includes(name) || name.includes(countryLower)) {
+        return { country: countryName, emoji };
+      }
+    }
+    return { country: countryName, emoji: '✈️' };
+  }
+
+  // Check if the city parameter itself contains a country or is a country
+  for (const [name, emoji] of Object.entries(countryMap)) {
+    if (cityLower.includes(name)) {
+      return { country: name.charAt(0).toUpperCase() + name.slice(1), emoji };
+    }
+  }
+
+  return { country: '', emoji: '✈️' };
+}
+
+/**
+ * Formats a hook template string by replacing placeholders.
+ */
+function formatHookText(template, locationName, numDays, emoji) {
+  let text = template;
+  
+  // 1. Replace emoji placeholders FIRST to avoid overlapping with location placeholders
+  text = text.replace(/\(country emoji\)/gi, emoji);
+  text = text.replace(/country emoji/gi, emoji);
+  text = text.replace(/{emoji}/gi, emoji);
+
+  // 2. Replace location/country placeholders (case-sensitive for uppercase, and bracketed formats)
+  text = text.replace(/\bCOUNTRY\b/g, locationName);
+  text = text.replace(/\bcountry\b/g, locationName);
+  text = text.replace(/{location}/gi, locationName);
+  text = text.replace(/{country}/gi, locationName);
+
+  // 3. Replace day count placeholders (case-sensitive for uppercase, and bracketed formats)
+  text = text.replace(/\bDAYS\b/g, numDays);
+  text = text.replace(/{days}/gi, numDays);
+
+  return text;
+}
+
+/**
+ * Wraps text into multiple lines based on a maximum width constraint, supporting explicit newlines.
+ */
+function wrapText(ctx, text, maxWidth) {
+  const paragraphs = text.split('\n');
+  const lines = [];
+  
+  for (const paragraph of paragraphs) {
+    const words = paragraph.split(' ');
+    let currentLine = words[0] || '';
+    
+    for (let i = 1; i < words.length; i++) {
+      const word = words[i];
+      const width = ctx.measureText(currentLine + ' ' + word).width;
+      if (width < maxWidth) {
+        currentLine += (currentLine ? ' ' : '') + word;
+      } else {
+        lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+  }
+  return lines;
+}
+
+/**
+ * Renders the hook (first page) slide as a beautiful centered UGC slide.
  *
  * @param {string} city     - Location string (e.g., 'Paris')
  * @param {number} numDays  - Number of days constraint (e.g. 3)
+ * @param {Array} itinerary - Full itinerary array for country/flag extraction
  * @returns {Buffer} PNG buffer
  */
-export async function renderHookSlide(city, numDays) {
+export async function renderHookSlide(city, numDays, itinerary, postType = 'itinerary') {
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
   // 1. Draw Background Image
-  // Using city string to fetch a beautiful background
-  const bgImgBuffer = await fetchImageForLocation(city);
+  // Always gets Pexels API: (CITY) famous places pov
+  const bgImgBuffer = await fetchHookImage(city);
   if (bgImgBuffer) {
     try {
       const bgImg = await loadImage(bgImgBuffer);
@@ -43,59 +222,137 @@ export async function renderHookSlide(city, numDays) {
     ctx.fillRect(0, 0, W, H);
   }
 
-  // 2. Add subtle dark gradient to make text readable
+  // 2. Add subtle dark gradient overlay for maximum readability
   const gradient = ctx.createLinearGradient(0, 0, 0, H);
-  gradient.addColorStop(0, 'rgba(0,0,0,0.3)');
-  gradient.addColorStop(1, 'rgba(0,0,0,0.1)');
+  gradient.addColorStop(0, 'rgba(0,0,0,0.25)');
+  gradient.addColorStop(1, 'rgba(0,0,0,0.15)');
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, W, H);
 
-  // 3. Draw Text
-  const startX = 110;
-  let currentY = 550; // Starting Y coordinate based on firstpage.png mapping
+  // 3. Select and Format UGC Hook Text
+  const locationName = city ? city.split(',')[0].trim().toLowerCase() : 'travel';
+  const countryInfo = getCountryAndEmoji(city, itinerary);
+  const emoji = countryInfo.emoji;
 
-  ctx.textAlign = 'left';
+  const templates = CONFIG.hook.templates[postType] || CONFIG.hook.templates.itinerary;
+
+  const randomTemplate = templates[Math.floor(Math.random() * templates.length)];
+  const hookText = formatHookText(randomTemplate, locationName, numDays, emoji);
+  console.log(`       [UGC Hook] Text generated: "${hookText}" (using template: "${randomTemplate}")`);
+
+  // Strip emoji from the drawn text so it doesn't get drawn as letters like FR
+  let plainText = hookText;
+  if (emoji) {
+    plainText = hookText.replace(emoji, '').trim();
+  }
+
+  // Fetch emoji image if present
+  let emojiImg = null;
+  if (emoji) {
+    const emojiBuffer = await fetchEmojiImage(emoji);
+    if (emojiBuffer) {
+      try {
+        emojiImg = await loadImage(emojiBuffer);
+      } catch (err) {
+        console.warn(`⚠️ Failed to load fetched emoji image for "${emoji}":`, err);
+      }
+    }
+  }
+
+  // 4. Wrap and Render centered text with bold UGC style
+  const fontSize = CONFIG.fonts.sizes.hookText || 56;
+  ctx.font = `bold ${fontSize}px "Arial", "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
+
+  // Use a narrower text width (64% of canvas width) to match UGC mobile screens and force elegant multi-line wrapping
+  const maxTextWidth = W * 0.64;
+  const lines = wrapText(ctx, plainText, maxTextWidth);
+  const lineHeight = fontSize * 1.25;
+  const totalTextHeight = lines.length * lineHeight;
+  
+  const pos = CONFIG.hook?.position || { x: 'center', y: 'center', offsetX: 0, offsetY: 0 };
+  
+  let startY = (H - totalTextHeight) / 2 + lineHeight / 2;
+  if (pos.y === 'top') startY = lineHeight / 2;
+  else if (pos.y === 'bottom') startY = H - totalTextHeight + lineHeight / 2;
+  startY += (pos.offsetY || 0);
+
+  let startX = W / 2;
+  if (pos.x === 'left') startX = maxTextWidth / 2; 
+  else if (pos.x === 'right') startX = W - maxTextWidth / 2;
+  startX += (pos.offsetX || 0);
+
+  ctx.save();
+  ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  // "3 Day"
-  ctx.fillStyle = '#FFFFFF';
-  ctx.font = `600 72px "Inter", sans-serif`;
-  
-  // Add subtle shadow for white text readability
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-  ctx.shadowBlur = 8;
-  ctx.shadowOffsetY = 4;
-  
-  ctx.fillText(`${numDays} Day`, startX, currentY);
+  // Outline setup
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.85)';
+  ctx.lineWidth = Math.max(5, fontSize * 0.12);
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
 
-  currentY += 140; // Step down for the city name
-
-  // "CITY"
-  const displayCity = city ? city.split(',')[0].trim().toUpperCase() : 'LOCATION';
-  ctx.fillStyle = '#FCD34D'; // Soft bright yellow
-  ctx.font = `bold 186px "Horizon", "Arial Black", sans-serif`;
-  
-  // Slightly harder shadow for yellow text
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
-  ctx.shadowBlur = 4;
-  ctx.shadowOffsetY = 6;
+  // Drop shadow setup (applied to the outline/background)
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+  ctx.shadowBlur = 12;
   ctx.shadowOffsetX = 3;
+  ctx.shadowOffsetY = 3;
 
-  ctx.fillText(displayCity, startX, currentY);
+  // Render lines
+  lines.forEach((line, index) => {
+    const x = startX;
+    const y = startY + index * lineHeight;
 
-  currentY += 150; // Step down for 'Itinerary'
-  
-  // "Itinerary"
-  ctx.fillStyle = '#FFFFFF';
-  ctx.font = `600 72px "Inter", sans-serif`;
-  
-  // Reset shadow for white text
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-  ctx.shadowBlur = 8;
-  ctx.shadowOffsetY = 4;
-  ctx.shadowOffsetX = 0;
+    // Draw the dark outline with drop shadow
+    ctx.strokeText(line, x, y);
 
-  ctx.fillText('Itinerary', startX, currentY);
+    // Draw the crisp white text on top (shadow disabled so it's sharp)
+    ctx.save();
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(line, x, y);
+    ctx.restore();
+
+    // If this is the last line, draw the emoji next to it
+    if (index === lines.length - 1) {
+      if (emojiImg) {
+        const lineWidth = ctx.measureText(line).width;
+        const emojiSize = fontSize * 1.0;
+        const gap = 12;
+        const emojiX = startX + lineWidth / 2 + gap;
+        const emojiY = y - emojiSize / 2;
+
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetX = 3;
+        ctx.shadowOffsetY = 3;
+        ctx.drawImage(emojiImg, emojiX, emojiY, emojiSize, emojiSize);
+        ctx.restore();
+      } else if (emoji) {
+        // Fallback: draw emoji as text at the end of the line
+        const lineWidth = ctx.measureText(line).width;
+        const gap = 12;
+        const emojiX = startX + lineWidth / 2 + gap;
+
+        ctx.save();
+        ctx.textAlign = 'left';
+        ctx.strokeText(emoji, emojiX, y);
+
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText(emoji, emojiX, y);
+        ctx.restore();
+      }
+    }
+  });
+
+  ctx.restore();
 
   return canvas.toBuffer('image/png');
 }

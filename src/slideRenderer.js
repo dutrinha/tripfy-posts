@@ -39,7 +39,8 @@ function travelEstimate(distKm) {
 // ── Travel Time Pill ──────────────────────────────────────
 
 function drawTravelPill(ctx, text, x, y) {
-  ctx.font = `bold 16px ${F}`;
+  const size = CONFIG.fonts?.sizes?.travelPill || 16;
+  ctx.font = `bold ${size}px ${F}`;
   const tw = ctx.measureText(text).width;
   const pw = tw + 28;
   const ph = 30;
@@ -110,7 +111,8 @@ export async function renderDaySlide(dayData, imageBuffers, city, slideIndex, to
     ctx.shadowOffsetX = 1;
     ctx.shadowOffsetY = 2;
 
-    ctx.font = `bold 44px ${F}`;
+    const locSize = CONFIG.fonts?.sizes?.locationName || 44;
+    ctx.font = `bold ${locSize}px ${F}`;
     ctx.fillStyle = '#FFFFFF';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
@@ -132,7 +134,9 @@ export async function renderDaySlide(dayData, imageBuffers, city, slideIndex, to
     if (act.lat && act.lng && next.lat && next.lng) {
       const dist = haversine(act.lat, act.lng, next.lat, next.lng);
       const travel = travelEstimate(dist);
-      const modeText = travel.mode === 'walk' ? 'Minute walk' : 'Minute drive';
+      const walkTpl = CONFIG.templates?.slide?.walkText || 'Minute walk';
+      const driveTpl = CONFIG.templates?.slide?.driveText || 'Minute drive';
+      const modeText = travel.mode === 'walk' ? walkTpl : driveTpl;
       const pillText = `${travel.mins} ${modeText}`;
       drawTravelPill(ctx, pillText, 22, y + h);
     }
@@ -146,11 +150,15 @@ export async function renderDaySlide(dayData, imageBuffers, city, slideIndex, to
   ctx.shadowBlur = 8;
   ctx.shadowOffsetY = 2;
 
-  ctx.font = `bold 50px ${F}`;
+  const daySize = CONFIG.fonts?.sizes?.dayNumber || 50;
+  ctx.font = `bold ${daySize}px ${F}`;
   ctx.fillStyle = '#FFFFFF';
   ctx.textAlign = 'right';
   ctx.textBaseline = 'top';
-  ctx.fillText(`Day ${dayData.day}:`, W - 35, 25);
+  
+  const dayTpl = CONFIG.templates?.slide?.dayLabel || 'Day {day}:';
+  const dayText = dayTpl.replace('{day}', dayData.day);
+  ctx.fillText(dayText, W - 35, 25);
   ctx.restore();
 
   return canvas.toBuffer('image/png');

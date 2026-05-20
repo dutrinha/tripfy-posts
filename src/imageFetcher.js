@@ -48,14 +48,14 @@ function writeCache(query, buffer) {
 
 // ── API Fetchers ───────────────────────────────────────────
 
-async function pexels(query) {
+async function pexels(query, orientation = 'portrait') {
   const key = process.env.PEXELS_API_KEY;
   if (!key) return null;
 
   try {
     const { data } = await axios.get('https://api.pexels.com/v1/search', {
       headers: { Authorization: key },
-      params: { query, per_page: 1, orientation: 'landscape', size: 'large' },
+      params: { query, per_page: 1, orientation },
       timeout: CONFIG.images.timeout,
     });
 
@@ -71,28 +71,36 @@ async function pexels(query) {
   }
 }
 
-async function unsplash(query) {
-  const key = process.env.UNSPLASH_ACCESS_KEY;
-  if (!key) return null;
+async function pexelsMultiple(query, count = 4, orientation = 'portrait') {
+  const key = process.env.PEXELS_API_KEY;
+  if (!key) return [];
 
   try {
-    const { data } = await axios.get('https://api.unsplash.com/search/photos', {
-      headers: { Authorization: `Client-ID ${key}` },
-      params: { query, per_page: 1, orientation: 'portrait' },
+    const { data } = await axios.get('https://api.pexels.com/v1/search', {
+      headers: { Authorization: key },
+      params: { query, per_page: count, orientation },
       timeout: CONFIG.images.timeout,
     });
 
-    const result = data.results?.[0];
-    if (!result) return null;
+    if (!data.photos || data.photos.length === 0) return [];
 
-    const url = result.urls.regular;
-    const img = await axios.get(url, { responseType: 'arraybuffer', timeout: CONFIG.images.timeout });
-    return Buffer.from(img.data);
+    const buffers = [];
+    for (const photo of data.photos) {
+      const url = photo.src.large2x || photo.src.large;
+      try {
+        const img = await axios.get(url, { responseType: 'arraybuffer', timeout: CONFIG.images.timeout });
+        buffers.push(Buffer.from(img.data));
+      } catch (e) {
+        console.warn(`    [pexelsMultiple] failed to fetch image url: ${url}`);
+      }
+    }
+    return buffers;
   } catch (err) {
-    console.warn(`    [unsplash] failed for "${query}": ${err.message}`);
-    return null;
+    console.warn(`    [pexelsMultiple] failed for "${query}": ${err.message}`);
+    return [];
   }
 }
+
 
 // ── Local Image Loader ─────────────────────────────────────
 // Place images in ./images/ named by place_id or day-index
@@ -115,68 +123,46 @@ function loadLocalImage(activityId, dayNum, index) {
   return null;
 }
 
-// ── Free Wikipedia / Wikimedia Image Fetcher ───────────────
-// No API key required — uses the open MediaWiki API
 
-const WIKI_UA = { 'User-Agent': 'TripfyCarouselGenerator/1.0 (https://tripfy.app; contact@tripfy.app)' };
-
-async function wikimedia(query) {
-  try {
-    const apiUrl = 'https://en.wikipedia.org/w/api.php';
-
-    // Step 1: Search Wikipedia for the page
-    const { data: searchData } = await axios.get(apiUrl, {
-      headers: WIKI_UA,
-      params: {
-        action: 'query',
-        list: 'search',
-        srsearch: query,
-        srlimit: 1,
-        format: 'json',
-      },
-      timeout: CONFIG.images.timeout,
-    });
-
-    const page = searchData?.query?.search?.[0];
-    if (!page) return null;
-
-    // Step 2: Get page's main image (pageimages API)
-    const { data: imageData } = await axios.get(apiUrl, {
-      headers: WIKI_UA,
-      params: {
-        action: 'query',
-        titles: page.title,
-        prop: 'pageimages',
-        piprop: 'original',
-        format: 'json',
-      },
-      timeout: CONFIG.images.timeout,
-    });
-
-    const pages = imageData?.query?.pages;
-    if (!pages) return null;
-
-    const pageObj = Object.values(pages)[0];
-    const imageUrl = pageObj?.original?.source;
-    if (!imageUrl) return null;
-
-    // Skip SVGs / icons — only want actual photos
-    if (/\.svg$/i.test(imageUrl)) return null;
-
-    // Step 3: Download the image
-    const img = await axios.get(imageUrl, {
-      responseType: 'arraybuffer',
-      timeout: CONFIG.images.timeout + 5000,
-      headers: WIKI_UA,
-    });
-    return Buffer.from(img.data);
-  } catch (err) {
-    // Silent fail — this is a free fallback
-    return null;
-  }
-}
 
 // ── Main Fetch Function ────────────────────────────────────
+
+/**
+ * Fetch background image for the hook slide.
+ * Always queries Pexels with the query: "(CITY) famous places pov".
+ * Checks disk cache first to prevent hitting API limits.
+ */
+export async function fetchHookImage(city) {
+  const cityLower = city ? city.toLowerCase().trim() : '';
+  let query = '';
+
+  const override = CONFIG.hook?.citySpecificQueries?.[cityLower];
+  if (override) {
+    query = override;
+  } else {
+    const template = CONFIG.hook?.hookFetchingText || '(CITY) street aesthetic vlog';
+    query = template.replace(/\(CITY\)/gi, city);
+  }
+
+  // 1. Disk cache
+  const cached = readCache(query);
+  if (cached) {
+    process.stdout.write(`    \x1b[32m✓\x1b[0m cached  ${query}\n`);
+    return cached;
+  }
+
+  // 2. Pexels (full query)
+  let buf = await pexels(query);
+  if (buf) {
+    process.stdout.write(`    \x1b[35m✓\x1b[0m pexels  ${query}\n`);
+    writeCache(query, buf);
+    return buf;
+  }
+
+  // 3. Fallback standard fetching if Pexels fails
+  process.stdout.write(`    \x1b[31m✗\x1b[0m pexels failed for hook, trying fallback  ${query}\n`);
+  return fetchImageForLocation(query, city);
+}
 
 /**
  * Fetch a high-quality image for a location.
@@ -204,28 +190,18 @@ export async function fetchImageForLocation(locationName, city, activityId = '',
   let buf = await pexels(fullQuery);
   if (buf) { process.stdout.write(`    \x1b[35m✓\x1b[0m pexels  ${locationName}\n`); writeCache(fullQuery, buf); return buf; }
 
-  // 4. Unsplash (full query)
-  buf = await unsplash(fullQuery);
-  if (buf) { process.stdout.write(`    \x1b[36m✓\x1b[0m unsplsh ${locationName}\n`); writeCache(fullQuery, buf); return buf; }
 
   // 5. Pexels (name only)
   buf = await pexels(locationName);
   if (buf) { process.stdout.write(`    \x1b[35m~\x1b[0m pexels  ${locationName} (name-only)\n`); writeCache(fullQuery, buf); return buf; }
 
-  // 6. Unsplash (name only)
-  buf = await unsplash(locationName);
-  if (buf) { process.stdout.write(`    \x1b[36m~\x1b[0m unsplsh ${locationName} (name-only)\n`); writeCache(fullQuery, buf); return buf; }
 
-  // 7. Wikipedia / Wikimedia Commons (free, no key needed)
-  buf = await wikimedia(locationName);
-  if (buf) { process.stdout.write(`    \x1b[33m✓\x1b[0m wiki    ${locationName}\n`); writeCache(fullQuery, buf); return buf; }
 
-  buf = await wikimedia(`${locationName} ${city}`);
-  if (buf) { process.stdout.write(`    \x1b[33m~\x1b[0m wiki    ${locationName} (full)\n`); writeCache(fullQuery, buf); return buf; }
 
   // 8. City fallback (wiki)
-  const cityQuery = `${city} landmark`;
-  const cityBuf = readCache(cityQuery) || await pexels(cityQuery) || await unsplash(cityQuery) || await wikimedia(cityQuery);
+  const fallbackTemplate = CONFIG.images?.cityFallbackQuery || '{city} landmark';
+  const cityQuery = fallbackTemplate.replace(/\{city\}/gi, city);
+  const cityBuf = readCache(cityQuery) || await pexels(cityQuery);
   if (cityBuf) {
     process.stdout.write(`    \x1b[33m~\x1b[0m city fb ${locationName}\n`);
     writeCache(cityQuery, cityBuf);
@@ -251,4 +227,46 @@ export async function fetchImagesForDay(activities, city, dayNum, maxPhotos = 4)
   }
 
   return buffers;
+}
+
+/**
+ * Fetch multiple images for a single location (used for Top Places 2x2 grid).
+ * Priority: cache → Pexels → city fallback → empty array
+ */
+export async function fetchMultipleImagesForLocation(locationName, city, count = 4) {
+  const fullQuery = `${locationName} ${city}`;
+  
+  // 1. Pexels (full query)
+  let buffers = await pexelsMultiple(fullQuery, count);
+  if (buffers.length >= count) {
+    process.stdout.write(`    \x1b[35m✓\x1b[0m pexelsMultiple  ${locationName} (${buffers.length} imgs)\n`);
+    return buffers.slice(0, count);
+  }
+
+  // 2. Pexels (name only)
+  const fallbackBuffers = await pexelsMultiple(locationName, count);
+  if (fallbackBuffers.length >= count) {
+    process.stdout.write(`    \x1b[35m~\x1b[0m pexelsMultiple  ${locationName} (name-only)\n`);
+    return fallbackBuffers.slice(0, count);
+  }
+
+  // 3. If we still don't have enough, try to combine or use fallback
+  const combined = [...buffers, ...fallbackBuffers];
+  // Deduplicate by basic size check (not perfect but better than nothing)
+  const unique = [];
+  const sizes = new Set();
+  for (const b of combined) {
+    if (!sizes.has(b.length)) {
+      unique.push(b);
+      sizes.add(b.length);
+    }
+  }
+
+  if (unique.length > 0) {
+    process.stdout.write(`    \x1b[33m~\x1b[0m combined multiple ${locationName} (${unique.length} imgs)\n`);
+    return unique.slice(0, count);
+  }
+
+  process.stdout.write(`    \x1b[31m✗\x1b[0m none multiple   ${locationName}\n`);
+  return [];
 }

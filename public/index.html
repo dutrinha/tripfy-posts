@@ -346,9 +346,19 @@
   </header>
 
   <div class="container">
-    <div class="search-card">
-      <input type="text" id="share-code" placeholder="Enter 6-digit Share Code (e.g. 4F7X92)" maxlength="10">
-      <button id="fetch-btn">Fetch Itinerary</button>
+    <div class="search-card" style="flex-direction: column;">
+      <div style="display: flex; gap: 1rem; width: 100%;">
+        <input type="text" id="share-code" placeholder="Enter 6-digit Share Code (e.g. 4F7X92)" maxlength="10">
+        <button id="fetch-btn">Fetch Data</button>
+      </div>
+      <div style="display: flex; gap: 1.5rem; color: var(--text-muted); font-size: 0.95rem; margin-top: 0.5rem; margin-left: 0.5rem;">
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+          <input type="radio" name="post-type" value="itinerary" checked> Itinerary Carousel
+        </label>
+        <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+          <input type="radio" name="post-type" value="top-places"> Top Places Carousel
+        </label>
+      </div>
     </div>
 
     <div class="loading" id="loading">Fetching data...</div>
@@ -391,6 +401,7 @@
 
   <script>
     let currentItinerary = null;
+    let currentFlatPlaces = [];
     let currentCode = '';
 
     const fetchBtn = document.getElementById('fetch-btn');
@@ -443,10 +454,27 @@
     function renderItinerary() {
       if (!currentItinerary || !currentItinerary.items) return;
 
+      const mode = document.querySelector('input[name="post-type"]:checked').value;
+      
       titleEl.textContent = currentItinerary.title;
       cityInput.value = currentItinerary.title.split(',')[0].trim(); // Guess the city for convenience
       daysContainer.innerHTML = '';
 
+      if (mode === 'top-places') {
+        renderTopPlacesList();
+      } else {
+        renderDayByDay();
+      }
+    }
+
+    // Re-render when radio changes
+    document.querySelectorAll('input[name="post-type"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        if (currentItinerary) renderItinerary();
+      });
+    });
+
+    function renderDayByDay() {
       currentItinerary.items.forEach((day, dayIndex) => {
         const dayCard = document.createElement('div');
         dayCard.className = 'day-card';
@@ -519,6 +547,85 @@
       renderItinerary();
     }
 
+    function renderTopPlacesList() {
+      // Flatten
+      currentFlatPlaces = [];
+      currentItinerary.items.forEach(day => {
+        day.activities.forEach(act => {
+          currentFlatPlaces.push(act);
+        });
+      });
+      renderFlatPlacesUI();
+    }
+
+    function renderFlatPlacesUI() {
+      daysContainer.innerHTML = '';
+      
+      const card = document.createElement('div');
+      card.className = 'day-card';
+
+      const header = document.createElement('div');
+      header.className = 'day-header';
+      header.textContent = `All Places (${currentFlatPlaces.length} total)`;
+      card.appendChild(header);
+
+      const activityList = document.createElement('ul');
+      activityList.className = 'activity-list';
+
+      currentFlatPlaces.forEach((act, actIndex) => {
+        const li = document.createElement('li');
+        li.className = 'activity-item';
+
+        const mainContainer = document.createElement('div');
+        mainContainer.className = 'activity-main';
+
+        const img = document.createElement('img');
+        img.className = 'activity-img';
+        const params = new URLSearchParams({
+          name: act.name || act.text || '',
+          city: cityInput.value || currentItinerary.title || '',
+          id: act.id || '',
+          dayNum: 1,
+          index: actIndex
+        });
+        img.src = '/api/preview-image?' + params.toString();
+        img.onerror = () => { img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="%231c1f26"/><text x="50" y="55" font-family="sans-serif" font-size="30" text-anchor="middle" fill="%23334155">?</text></svg>'; };
+
+        const info = document.createElement('div');
+        info.className = 'activity-info';
+        
+        const nameContainer = document.createElement('div');
+        nameContainer.className = 'activity-name';
+        nameContainer.textContent = act.name || act.text || 'Unnamed Place';
+
+        const metaContainer = document.createElement('div');
+        metaContainer.className = 'activity-meta';
+        metaContainer.textContent = `${act.type || 'Activity'} • ${act.vicinity || ''}`;
+
+        info.appendChild(nameContainer);
+        info.appendChild(metaContainer);
+
+        mainContainer.appendChild(img);
+        mainContainer.appendChild(info);
+
+        const delBtn = document.createElement('button');
+        delBtn.className = 'btn-danger';
+        delBtn.textContent = 'Remove';
+        delBtn.onclick = () => {
+          currentFlatPlaces.splice(actIndex, 1);
+          renderFlatPlacesUI();
+        };
+
+        li.appendChild(mainContainer);
+        li.appendChild(delBtn);
+        activityList.appendChild(li);
+      });
+
+      card.appendChild(activityList);
+      daysContainer.appendChild(card);
+      container.style.display = 'block';
+    }
+
     generateBtn.addEventListener('click', async () => {
       if (!currentItinerary || !currentItinerary.items) return;
 
@@ -527,14 +634,18 @@
       hideStatus();
       document.getElementById('output-container').style.display = 'none';
 
+      const mode = document.querySelector('input[name="post-type"]:checked').value;
+      const apiEndpoint = mode === 'top-places' ? '/api/generate-top-places' : '/api/generate';
+      const itemsPayload = mode === 'top-places' ? currentFlatPlaces : currentItinerary.items;
+
       try {
-        const res = await fetch('/api/generate', {
+        const res = await fetch(apiEndpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             code: currentCode,
             city: cityInput.value || currentItinerary.title,
-            items: currentItinerary.items
+            items: itemsPayload
           })
         });
 

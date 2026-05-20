@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { generateCarousel } from './generate.js';
+import { generateTopPlacesCarousel } from './src/topPlacesPipeline.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -136,6 +137,23 @@ app.post('/api/generate', async (req, res) => {
     res.json({ success: true, result });
   } catch (err) {
     console.error('Error generating carousel:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/generate-top-places', async (req, res) => {
+  try {
+    const { code, items, city } = req.body;
+    if (!items || !items.length) {
+      return res.status(400).json({ error: 'No places provided' });
+    }
+
+    console.log(`Starting Top Places generation for code ${code}...`);
+    const result = await generateTopPlacesCarousel(items, code, city);
+    
+    res.json({ success: true, result });
+  } catch (err) {
+    console.error('Error generating top places carousel:', err);
     res.status(500).json({ error: err.message });
   }
 });
