@@ -6,6 +6,21 @@ import { GlobalFonts } from '@napi-rs/canvas';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+/**
+ * Resolves font file path, checking multiple possible locations
+ * (process.cwd()-based and __dirname-based) for serverless compatibility.
+ */
+function resolveFontPath(filename) {
+  const candidates = [
+    path.join(process.cwd(), 'assets', filename),
+    path.join(__dirname, '..', 'assets', filename),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
 try {
   // Statically analyzable read calls for Vercel Node File Trace (NFT).
   // These MUST contain the path.join(__dirname, ...) structure with literal strings
@@ -17,45 +32,52 @@ try {
     // Suppress errors from dummy reads during trace static-analysis
   }
 
-  // Robust path resolution checking both process.cwd() and __dirname
-  let regularFont = path.join(process.cwd(), 'assets', 'Inter-Regular.ttf');
-  let boldFont = path.join(process.cwd(), 'assets', 'Inter-Bold.ttf');
+  const regularPath = resolveFontPath('Inter-Regular.ttf');
+  const boldPath = resolveFontPath('Inter-Bold.ttf');
 
-  if (!fs.existsSync(regularFont)) {
-    regularFont = path.join(__dirname, '..', 'assets', 'Inter-Regular.ttf');
-  }
-  if (!fs.existsSync(boldFont)) {
-    boldFont = path.join(__dirname, '..', 'assets', 'Inter-Bold.ttf');
-  }
-
-  // Buffer-based registration with path-based fallback to guarantee compatibility on Vercel
-  if (fs.existsSync(regularFont)) {
-    try {
-      global.interRegularFontBuffer = fs.readFileSync(regularFont);
-      GlobalFonts.register(global.interRegularFontBuffer, 'Inter');
-      console.log(`✅ Registered font buffer from: ${regularFont} as Inter`);
-    } catch (bufferErr) {
-      console.warn('⚠️ Buffer registration failed, falling back to path registration:', bufferErr.message);
-      GlobalFonts.registerFromPath(regularFont, 'Inter');
-      console.log(`✅ Registered font from path: ${regularFont} as Inter`);
+  // Register Regular weight
+  if (regularPath) {
+    const buf = fs.readFileSync(regularPath);
+    const result = GlobalFonts.register(buf, 'Inter');
+    if (result) {
+      console.log(`✅ Registered Inter Regular from: ${regularPath} (${buf.length} bytes)`);
+    } else {
+      // Fallback to path-based registration
+      GlobalFonts.registerFromPath(regularPath, 'Inter');
+      console.log(`✅ Registered Inter Regular via path: ${regularPath}`);
     }
   } else {
-    console.warn('⚠️ Warning: Regular font file not found:', regularFont);
+    console.warn('⚠️ Warning: Inter-Regular.ttf not found in any location');
   }
 
-  if (fs.existsSync(boldFont)) {
-    try {
-      global.interBoldFontBuffer = fs.readFileSync(boldFont);
-      GlobalFonts.register(global.interBoldFontBuffer, 'Inter');
-      console.log(`✅ Registered font buffer from: ${boldFont} as Inter`);
-    } catch (bufferErr) {
-      console.warn('⚠️ Buffer registration failed, falling back to path registration:', bufferErr.message);
-      GlobalFonts.registerFromPath(boldFont, 'Inter');
-      console.log(`✅ Registered font from path: ${boldFont} as Inter`);
+  // Register Bold weight
+  if (boldPath) {
+    const buf = fs.readFileSync(boldPath);
+    const result = GlobalFonts.register(buf, 'Inter');
+    if (result) {
+      console.log(`✅ Registered Inter Bold from: ${boldPath} (${buf.length} bytes)`);
+    } else {
+      GlobalFonts.registerFromPath(boldPath, 'Inter');
+      console.log(`✅ Registered Inter Bold via path: ${boldPath}`);
     }
   } else {
-    console.warn('⚠️ Warning: Bold font file not found:', boldFont);
+    console.warn('⚠️ Warning: Inter-Bold.ttf not found in any location');
+  }
+
+  // Also load any fonts from the assets directory as a belt-and-suspenders fallback
+  const assetsDir = regularPath ? path.dirname(regularPath) : path.join(__dirname, '..', 'assets');
+  if (fs.existsSync(assetsDir)) {
+    GlobalFonts.loadFontsFromDir(assetsDir);
+    console.log(`✅ Also ran loadFontsFromDir on: ${assetsDir}`);
+  }
+
+  // Final verification
+  const hasInter = GlobalFonts.has('Inter');
+  console.log(`🔍 Font verification — Inter registered: ${hasInter}`);
+  if (!hasInter) {
+    console.error('❌ CRITICAL: Inter font is NOT registered. Text will be invisible on serverless environments without system fonts.');
   }
 } catch (e) {
-  console.warn('⚠️ Warning: Failed to register custom fonts:', e.message);
+  console.error('❌ Failed to register custom fonts:', e.message);
+  console.error(e.stack);
 }
