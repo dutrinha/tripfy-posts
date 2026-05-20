@@ -21,6 +21,7 @@
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
       background-color: var(--bg);
       color: var(--text);
+      -webkit-text-size-adjust: 100%;
       margin: 0;
       padding: 0;
       display: flex;
@@ -43,7 +44,9 @@
       font-size: 2.5rem;
       background: linear-gradient(to right, #a78bfa, #f472b6);
       -webkit-background-clip: text;
+      background-clip: text;
       -webkit-text-fill-color: transparent;
+      color: transparent;
     }
 
     .container {
@@ -74,6 +77,9 @@
       color: var(--text);
       outline: none;
       transition: border-color 0.2s;
+      -webkit-appearance: none;
+      appearance: none;
+      opacity: 1;
     }
 
     input[type="text"]:focus {
@@ -262,6 +268,7 @@
       white-space: pre-wrap;
       max-height: 200px;
       overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
       margin-bottom: 1rem;
       font-size: 0.95rem;
       color: var(--text);
