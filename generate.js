@@ -7,9 +7,11 @@
 //    node generate.js --input example.json --code 4F7X92 --city Paris
 // ============================================================
 
+import './src/fontRegister.js';
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { parseItinerary, extractCity } from './src/parser.js';
 import { fetchImagesForDay } from './src/imageFetcher.js';
 import { renderDaySlide } from './src/slideRenderer.js';
@@ -17,27 +19,6 @@ import { renderCtaSlide } from './src/ctaRenderer.js';
 import { renderHookSlide } from './src/hookRenderer.js';
 import { generateCaption } from './src/captionGenerator.js';
 import { CONFIG } from './config.js';
-
-// Font Registration for Vercel/Linux environments
-import { GlobalFonts } from '@napi-rs/canvas';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-try {
-  const regularFont = path.join(__dirname, 'assets', 'Inter-Regular.ttf');
-  const boldFont = path.join(__dirname, 'assets', 'Inter-Bold.ttf');
-
-  if (fs.existsSync(regularFont)) {
-    GlobalFonts.registerFromPath(regularFont, 'Arial');
-  }
-  if (fs.existsSync(boldFont)) {
-    GlobalFonts.registerFromPath(boldFont, 'Arial');
-  }
-} catch (e) {
-  console.warn('⚠️ Warning: Failed to register custom fonts:', e.message);
-}
 
 // ── CLI Argument Parsing ───────────────────────────────────
 
