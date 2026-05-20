@@ -5,69 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
 
-/**
- * Generates the official Twemoji CDN URL for a given emoji character.
- * Filters out 'fe0f' (variation selector) because Twemoji omits it for standard icons.
- */
-function getTwemojiUrl(emoji) {
-  const codePoints = [];
-  for (const char of emoji) {
-    const cp = char.codePointAt(0);
-    codePoints.push(cp.toString(16));
-  }
-  const cleanCodePoints = codePoints.filter(cp => cp !== 'fe0f');
-  const hexStr = cleanCodePoints.join('-');
-  return `https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/${hexStr}.png`;
-}
-
-/**
- * Downloads and caches the Twemoji PNG image for an emoji.
- */
-async function fetchEmojiImage(emoji) {
-  if (!emoji) return null;
-  
-  const cacheDir = CONFIG.images.cacheDir || './cache';
-  const codePoints = [];
-  for (const char of emoji) {
-    const cp = char.codePointAt(0);
-    codePoints.push(cp.toString(16));
-  }
-  const cleanCodePoints = codePoints.filter(cp => cp !== 'fe0f');
-  const hexStr = cleanCodePoints.join('-');
-  const cachePath = path.join(cacheDir, `emoji_${hexStr}.png`);
-
-  // 1. Check local cache
-  try {
-    if (fs.existsSync(cachePath)) {
-      return fs.readFileSync(cachePath);
-    }
-  } catch (e) {
-    // Ignore cache read errors
-  }
-
-  // 2. Fetch from Twemoji CDN
-  try {
-    const url = `https://cdnjs.cloudflare.com/ajax/libs/twemoji/14.0.2/72x72/${hexStr}.png`;
-    const res = await axios.get(url, { responseType: 'arraybuffer', timeout: CONFIG.images.timeout || 10000 });
-    const buffer = Buffer.from(res.data);
-
-    // 3. Save to cache
-    try {
-      if (!fs.existsSync(cacheDir)) {
-        fs.mkdirSync(cacheDir, { recursive: true });
-      }
-      fs.writeFileSync(cachePath, buffer);
-    } catch (e) {
-      // Ignore cache write errors (e.g. read-only file systems)
-    }
-
-    return buffer;
-  } catch (err) {
-    console.warn(`⚠️ Failed to fetch emoji image from Twemoji CDN for "${emoji}" (${hexStr}):`, err.message);
-    return null;
-  }
-}
-
+import { fetchEmojiImage } from './emojiHelper.js';
 
 const W = CONFIG.width;
 const H = CONFIG.height;

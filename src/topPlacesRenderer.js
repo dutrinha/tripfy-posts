@@ -1,6 +1,7 @@
 import { createCanvas, loadImage } from '@napi-rs/canvas';
 import { CONFIG } from '../config.js';
 import { drawImageCover, drawGradientPlaceholder } from './utils.js';
+import { fetchEmojiImage } from './emojiHelper.js';
 
 const W = CONFIG.width;
 const H = CONFIG.height;
@@ -66,15 +67,23 @@ export async function renderTopPlaceSlide(placeName, imageBuffers) {
     }
   }
   
-  // Center Text rendering with outline
+  // Fetch emoji image
   const emoji = '📍';
-  const fullText = `${emoji} ${placeName}`;
+  let emojiImg = null;
+  try {
+    const emojiBuffer = await fetchEmojiImage(emoji);
+    if (emojiBuffer) {
+      emojiImg = await loadImage(emojiBuffer);
+    }
+  } catch (err) {
+    console.warn(`⚠️ Failed to load fetched emoji image for "${emoji}":`, err);
+  }
   
   const fontSize = CONFIG.fonts?.sizes?.locationName || 56;
   ctx.font = `bold ${fontSize}px "Arial", "Segoe UI Emoji", "Segoe UI Symbol", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
   
   const maxTextWidth = W * 0.8;
-  const lines = wrapText(ctx, fullText, maxTextWidth);
+  const lines = wrapText(ctx, placeName, maxTextWidth);
   const lineHeight = fontSize * 1.25;
   const totalTextHeight = lines.length * lineHeight;
   
@@ -101,20 +110,62 @@ export async function renderTopPlaceSlide(placeName, imageBuffers) {
   lines.forEach((line, index) => {
     const y = startY + index * lineHeight;
 
-    // Draw the dark outline with drop shadow
-    ctx.strokeText(line, startX, y);
+    if (index === 0) {
+      const lineWidth = ctx.measureText(line).width;
+      const emojiSize = fontSize * 1.0;
+      const spacingGap = 12;
+      const totalWidth = emojiSize + spacingGap + lineWidth;
+      
+      const emojiX = startX - totalWidth / 2;
+      const textX = startX + (emojiSize + spacingGap) / 2;
+      const emojiY = y - emojiSize / 2;
 
-    // Draw the crisp white text on top (shadow disabled so it's sharp)
-    ctx.save();
-    ctx.shadowColor = 'transparent';
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(line, startX, y);
-    ctx.restore();
+      // Draw outline for first line text
+      ctx.strokeText(line, textX, y);
+
+      // Draw emoji shadow & outline/image
+      ctx.save();
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.6)';
+      ctx.shadowBlur = 12;
+      ctx.shadowOffsetX = 3;
+      ctx.shadowOffsetY = 3;
+      if (emojiImg) {
+        ctx.drawImage(emojiImg, emojiX, emojiY, emojiSize, emojiSize);
+      } else {
+        ctx.textAlign = 'left';
+        ctx.strokeText(emoji, emojiX, y);
+      }
+      ctx.restore();
+
+      // Draw crisp white text on top (shadow disabled)
+      ctx.save();
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText(line, textX, y);
+      
+      if (!emojiImg) {
+        ctx.textAlign = 'left';
+        ctx.fillText(emoji, emojiX, y);
+      }
+      ctx.restore();
+    } else {
+      // Draw subsequent lines centered
+      ctx.strokeText(line, startX, y);
+
+      ctx.save();
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillText(line, startX, y);
+      ctx.restore();
+    }
   });
-
+  
   ctx.restore();
   
   return canvas.toBuffer('image/png');
